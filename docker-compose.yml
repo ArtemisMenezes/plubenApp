@@ -1,0 +1,32 @@
+version: "3.8"
+
+# ATENÇÃO: este compose é para DESENVOLVIMENTO LOCAL. Em produção, o
+# recomendado é usar um banco gerenciado (Neon, Supabase, RDS, Cloud SQL)
+# em vez de rodar o Postgres você mesmo — ver README.md, seção "Produção".
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: leads_platform_db
+    restart: unless-stopped
+    environment:
+      # Sobe o container já com o banco e o usuário ADMIN definidos.
+      # A criação do usuário de aplicação (leads_app) acontece via schema.sql.
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+    ports:
+      # Em produção com API no mesmo host/rede Docker, remova este
+      # mapeamento de porta — a API acessa o banco pela rede interna do
+      # compose, sem precisar expor a 5432 para fora do container.
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_ADMIN_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

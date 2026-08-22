@@ -1,0 +1,22 @@
+# Segredos — NUNCA versionar
+.env
+backend/crm.sqlite3
+*.pem
+*.key
+
+# Dados brutos baixados da RFB/PGFN
+
+# Bloqueio total de dados
+dados/
+*.EMPRECSV
+*.csv
+*.dump
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node / Next.js (etapa futura)
+node_modules/
+.next/
