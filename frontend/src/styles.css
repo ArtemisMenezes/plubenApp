@@ -153,3 +153,7 @@
     color: #E7EAF0;
   }
 }
+
+#lovable-badge {
+  display: none !important;
+}
