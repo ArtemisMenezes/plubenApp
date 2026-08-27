@@ -228,6 +228,56 @@ def buscar_empresas(
     }
 
 
+@app.get("/api/localizacoes/municipios")
+def listar_municipios(uf: str = Query(..., min_length=2, max_length=2)):
+    """
+    Municípios que têm pelo menos uma empresa ativa cadastrada na UF
+    informada — usado pro <select> em cascata (UF → Município → Bairro)
+    no frontend. Só retorna município que realmente tem dado, em vez da
+    lista genérica de todos os municípios do Brasil.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT dm.codigo, dm.descricao
+                FROM estabelecimentos e
+                JOIN dom_municipio dm ON dm.codigo = e.municipio
+                WHERE e.uf = %s AND e.situacao_cadastral = '02'
+                ORDER BY dm.descricao
+                """,
+                (uf.upper(),),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+@app.get("/api/localizacoes/bairros")
+def listar_bairros(
+    uf: str = Query(..., min_length=2, max_length=2),
+    municipio: str = Query(..., description="Código do município (padrão RFB)"),
+):
+    """Bairros com empresa ativa cadastrada, dentro do município informado."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT bairro
+                FROM estabelecimentos
+                WHERE uf = %s AND municipio = %s AND situacao_cadastral = '02'
+                  AND bairro IS NOT NULL AND bairro <> ''
+                ORDER BY bairro
+                """,
+                (uf.upper(), municipio),
+            )
+            return [linha["bairro"] for linha in cur.fetchall()]
+    finally:
+        conn.close()
+
+
 @app.get("/api/empresas/export")
 def exportar_empresas(
     uf: Optional[str] = Query(None),

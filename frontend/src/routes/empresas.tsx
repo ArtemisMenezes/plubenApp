@@ -72,6 +72,14 @@ const MATRIZ_FILIAL: Record<string, string> = {
   "2": "Filial",
 };
 
+const UFS = [
+  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS",
+  "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC",
+  "SP", "SE", "TO",
+];
+
+type Municipio = { codigo: string; descricao: string };
+
 function montarQueryString(filtros: Filtros, extra: Record<string, string> = {}) {
   const params = new URLSearchParams();
   Object.entries(filtros).forEach(([chave, valor]) => {
@@ -89,6 +97,49 @@ function BuscarEmpresas() {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [buscou, setBuscou] = useState(false);
+
+  // Listas em cascata: município depende da UF escolhida, bairro depende
+  // do município escolhido. Cada select só habilita depois que o anterior
+  // tem um valor.
+  const [municipios, setMunicipios] = useState<Municipio[]>([]);
+  const [carregandoMunicipios, setCarregandoMunicipios] = useState(false);
+  const [bairros, setBairros] = useState<string[]>([]);
+  const [carregandoBairros, setCarregandoBairros] = useState(false);
+
+  async function selecionarUf(uf: string) {
+    setFiltros((atual) => ({ ...atual, uf, municipio: "", bairro: "" }));
+    setMunicipios([]);
+    setBairros([]);
+    if (!uf) return;
+    setCarregandoMunicipios(true);
+    try {
+      const resp = await fetch(`${API_URL}/api/localizacoes/municipios?uf=${uf}`);
+      if (!resp.ok) throw new Error("Falha ao carregar municípios");
+      setMunicipios((await resp.json()) as Municipio[]);
+    } catch {
+      setMunicipios([]);
+    } finally {
+      setCarregandoMunicipios(false);
+    }
+  }
+
+  async function selecionarMunicipio(codigoMunicipio: string) {
+    setFiltros((atual) => ({ ...atual, municipio: codigoMunicipio, bairro: "" }));
+    setBairros([]);
+    if (!codigoMunicipio || !filtros.uf) return;
+    setCarregandoBairros(true);
+    try {
+      const resp = await fetch(
+        `${API_URL}/api/localizacoes/bairros?uf=${filtros.uf}&municipio=${codigoMunicipio}`,
+      );
+      if (!resp.ok) throw new Error("Falha ao carregar bairros");
+      setBairros((await resp.json()) as string[]);
+    } catch {
+      setBairros([]);
+    } finally {
+      setCarregandoBairros(false);
+    }
+  }
 
   const TAMANHO_PAGINA = 50;
   const totalPaginas = total ? Math.ceil(total / TAMANHO_PAGINA) : 0;
@@ -151,13 +202,18 @@ function BuscarEmpresas() {
         >
           <div className="col-span-1">
             <label className="mb-1 block font-mono text-xs text-inkMuted">UF</label>
-            <input
-              maxLength={2}
+            <select
               value={filtros.uf}
-              onChange={(e) => setFiltros({ ...filtros, uf: e.target.value.toUpperCase() })}
-              placeholder="SP"
-              className="w-full rounded border border-edge bg-bg px-2 py-1.5 text-sm uppercase text-ink placeholder:text-inkMuted focus:outline-none focus:ring-2 focus:ring-accent"
-            />
+              onChange={(e) => void selecionarUf(e.target.value)}
+              className="w-full rounded border border-edge bg-bg px-2 py-1.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent"
+            >
+              <option value="">Todas</option>
+              {UFS.map((uf) => (
+                <option key={uf} value={uf}>
+                  {uf}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="col-span-1">
@@ -216,22 +272,48 @@ function BuscarEmpresas() {
 
           <div className="col-span-1">
             <label className="mb-1 block font-mono text-xs text-inkMuted">Município</label>
-            <input
+            <select
               value={filtros.municipio}
-              onChange={(e) => setFiltros({ ...filtros, municipio: e.target.value })}
-              placeholder="ex: Fortaleza"
-              className="w-full rounded border border-edge bg-bg px-2 py-1.5 text-sm text-ink placeholder:text-inkMuted focus:outline-none focus:ring-2 focus:ring-accent"
-            />
+              onChange={(e) => void selecionarMunicipio(e.target.value)}
+              disabled={!filtros.uf || carregandoMunicipios}
+              className="w-full rounded border border-edge bg-bg px-2 py-1.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
+            >
+              <option value="">
+                {!filtros.uf
+                  ? "Escolha a UF primeiro"
+                  : carregandoMunicipios
+                    ? "Carregando…"
+                    : "Todos"}
+              </option>
+              {municipios.map((m) => (
+                <option key={m.codigo} value={m.codigo}>
+                  {m.descricao}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="col-span-1">
             <label className="mb-1 block font-mono text-xs text-inkMuted">Bairro</label>
-            <input
+            <select
               value={filtros.bairro}
               onChange={(e) => setFiltros({ ...filtros, bairro: e.target.value })}
-              placeholder="ex: Centro"
-              className="w-full rounded border border-edge bg-bg px-2 py-1.5 text-sm text-ink placeholder:text-inkMuted focus:outline-none focus:ring-2 focus:ring-accent"
-            />
+              disabled={!filtros.municipio || carregandoBairros}
+              className="w-full rounded border border-edge bg-bg px-2 py-1.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
+            >
+              <option value="">
+                {!filtros.municipio
+                  ? "Escolha o município primeiro"
+                  : carregandoBairros
+                    ? "Carregando…"
+                    : "Todos"}
+              </option>
+              {bairros.map((bairro) => (
+                <option key={bairro} value={bairro}>
+                  {bairro}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="col-span-1">
@@ -314,6 +396,8 @@ function BuscarEmpresas() {
               type="button"
               onClick={() => {
                 setFiltros(FILTROS_VAZIOS);
+                setMunicipios([]);
+                setBairros([]);
               }}
               className="rounded border border-edge px-4 py-2 text-sm font-medium text-inkMuted hover:bg-surface2"
             >
